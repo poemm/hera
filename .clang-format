@@ -6,15 +6,15 @@ AlignAfterOpenBracket: DontAlign
 BinPackParameters: true
 BraceWrapping:
   AfterClass:      true
-  AfterControlStatement: false
-  AfterEnum:       false
+  AfterControlStatement: true
+  AfterEnum:       true
   AfterFunction:   true
   AfterNamespace:  true
   AfterObjCDeclaration: true
-  AfterStruct:     false
-  AfterUnion:      false
-  BeforeCatch:     false
-  BeforeElse:      false
+  AfterStruct:     true
+  AfterUnion:      true
+  BeforeCatch:     true
+  BeforeElse:      true
   SplitEmptyFunction: false
 BreakBeforeBraces: Custom
 BreakBeforeTernaryOperators: false
