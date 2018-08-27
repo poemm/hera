@@ -137,13 +137,22 @@ defaults:
       command: |
         ~/build/evmc/test/evmc-vmtester ~/build/src/libhera.so
 
-  evm2wasm-test: &evm2wasm-test
+  evm2wasm-direct-test: &evm2wasm-direct-test
     run:
-      name: "Run evm2wasm state tests"
+      name: "Run evm2wasm state tests (using evm2wasm.cpp directly)"
       command: |
         testeth --version
         testeth -t GeneralStateTests/stExample -- --testpath tests --vm ~/build/src/libhera.so --singlenet Byzantium --singletest "add11" --evmc evm1mode=evm2wasm.cpp
         testeth -t GeneralStateTests/stStackTests -- --testpath tests --vm ~/build/src/libhera.so --singlenet Byzantium --evmc evm1mode=evm2wasm.cpp
+
+  evm2wasm-contract-test: &evm2wasm-contract-test
+    run:
+      name: "Run evm2wasm state tests (using runevm contract)"
+      command: |
+        curl -o /tmp/runevm.wasm -L https://github.com/axic/runevm/releases/download/prototype/runevm.wasm
+        testeth --version
+        testeth -t GeneralStateTests/stExample -- --testpath tests --vm ~/build/src/libhera.so --singlenet Byzantium --singletest "add11" --evmc evm1mode=evm2wasm --evmc sys:evm2wasm=/tmp/runevm.wasm
+        testeth -t GeneralStateTests/stStackTests -- --testpath tests --vm ~/build/src/libhera.so --singlenet Byzantium --evmc evm1mode=evm2wasm --evmc sys:evm2wasm=/tmp/runevm.wasm
 
   upload-coverage-data: &upload-coverage-data
     run:
@@ -179,7 +188,8 @@ jobs:
       - *test
       - *test-wabt
       - *evmc-test
-      - *evm2wasm-test
+      - *evm2wasm-direct-test
+      - *evm2wasm-contract-test
 
   linux-gcc-shared-coverage:
     environment:
