@@ -150,6 +150,7 @@ defaults:
       name: "Run evm2wasm state tests (using runevm contract)"
       command: |
         curl -o /tmp/runevm.wasm -L https://github.com/axic/runevm/releases/download/prototype/runevm.wasm
+        #test "$(shasum /tmp/runevm.wasm)" = "598f87f072f66e2269dd6919292b2934dbb20492  /tmp/runevm.wasm"
         testeth --version
         testeth -t GeneralStateTests/stExample -- --testpath tests --vm ~/build/src/libhera.so --singlenet Byzantium --singletest "add11" --evmc evm1mode=evm2wasm --evmc sys:evm2wasm=/tmp/runevm.wasm
         testeth -t GeneralStateTests/stStackTests -- --testpath tests --vm ~/build/src/libhera.so --singlenet Byzantium --evmc evm1mode=evm2wasm --evmc sys:evm2wasm=/tmp/runevm.wasm
