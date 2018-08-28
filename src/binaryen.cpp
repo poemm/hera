@@ -25,6 +25,7 @@
 #include <wasm-validator.h>
 
 #include "binaryen.h"
+#include "binaryen-internal.h"
 #include "debugging.h"
 #include "eei.h"
 #include "exceptions.h"
@@ -434,8 +435,10 @@ namespace hera {
     heraAssert(false, string("Unsupported import called: ") + import->module.str + "::" + import->base.str + " (" + to_string(arguments.size()) + "arguments)");
   }
 
+namespace {
+
 // NOTE: This should be caught during deployment time by the Sentinel.
-void BinaryenEngine::validate_contract(Module & module)
+void validate_contract(Module & module)
 {
   ensureCondition(
     module.getExportOrNull(Name("main")) != nullptr,
@@ -466,6 +469,8 @@ void BinaryenEngine::validate_contract(Module & module)
       "Import from invalid namespace."
     );
   }
+}
+
 }
 
 std::unique_ptr<WasmEngine> BinaryenEngine::create()

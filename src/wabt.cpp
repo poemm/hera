@@ -32,6 +32,7 @@
 #include "src/wast-parser.h"
 
 #include "wabt.h"
+#include "wabt-internal.h"
 #include "debugging.h"
 #include "eei.h"
 #include "exceptions.h"
