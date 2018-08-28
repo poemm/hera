@@ -76,6 +76,7 @@ const map<string, hera_evm1mode> evm1mode_options {
 
 struct hera_instance : evmc_instance {
   std::unique_ptr<WasmEngine> engine{new BinaryenEngine};
+  bool fuzzing = false;
   hera_evm1mode evm1mode = hera_evm1mode::reject;
   bool metering = false;
   vector<pair<evmc_address, vector<uint8_t>>> contract_preload_list;
@@ -371,12 +372,18 @@ evmc_result hera_execute(
   } catch (InternalErrorException const& e) {
     ret.status_code = EVMC_INTERNAL_ERROR;
     HERA_DEBUG << "InternalError: " << e.what() << "\n";
+    if (hera->fuzzing)
+      abort();
   } catch (exception const& e) {
     ret.status_code = EVMC_INTERNAL_ERROR;
     HERA_DEBUG << "Unknown exception: " << e.what() << "\n";
+    if (hera->fuzzing)
+      abort();
   } catch (...) {
     ret.status_code = EVMC_INTERNAL_ERROR;
     HERA_DEBUG << "Totally unknown exception\n";
+    if (hera->fuzzing)
+      abort();
   }
 
   return ret;
@@ -459,6 +466,11 @@ int hera_set_option(
   if (strncmp(name, "sys:", 4) == 0) {
     if (hera_parse_sys_option(hera, string(name), string(value)))
       return 1;
+  }
+
+  if (strcmp(name, "fuzzing") == 0) {
+    hera->fuzzing = strcmp(value, "true") == 0;
+    return 1;
   }
 
   return 0;
