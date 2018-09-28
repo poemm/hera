@@ -42,6 +42,10 @@
 
 #include <hera/buildinfo.h>
 
+//for benchmarking
+#include <fstream>      // std::fstream
+#include <time.h>       // clock_t, clock
+
 using namespace std;
 using namespace hera;
 
@@ -247,9 +251,6 @@ void hera_destroy_result(evmc_result const* result) noexcept
 {
   delete[] result->output_data;
 }
-
-#include <fstream>      // std::fstream
-#include <time.h>       // clock_t, clock
 
 evmc_result hera_execute(
   evmc_instance *instance,
