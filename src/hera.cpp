@@ -248,6 +248,9 @@ void hera_destroy_result(evmc_result const* result) noexcept
   delete[] result->output_data;
 }
 
+#include <fstream>      // std::fstream
+#include <time.h>       // clock_t, clock
+
 evmc_result hera_execute(
   evmc_instance *instance,
   evmc_context *context,
@@ -257,6 +260,12 @@ evmc_result hera_execute(
   size_t code_size
 ) noexcept {
   hera_instance* hera = static_cast<hera_instance*>(instance);
+
+  // benchmarking start
+  std::fstream fs;
+  fs.open ("runtime_data.csv", std::fstream::out | std::fstream::app);
+  clock_t t = clock();
+
 
   HERA_DEBUG << "Executing message in Hera\n";
 
@@ -381,6 +390,11 @@ evmc_result hera_execute(
     ret.status_code = EVMC_INTERNAL_ERROR;
     HERA_DEBUG << "Totally unknown exception\n";
   }
+
+  // benchmarking end
+  t = clock() - t;
+  fs << ", " << ((float)t)/CLOCKS_PER_SEC;
+  fs.close();
 
   return ret;
 }

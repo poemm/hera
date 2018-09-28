@@ -41,6 +41,7 @@ using namespace std;
 
 namespace hera {
 
+
 class WavmEthereumInterface : public EthereumInterface {
 public:
   explicit WavmEthereumInterface(
@@ -57,6 +58,10 @@ public:
     m_wasmMemory = _wasmMemory;
   }
 
+  void nullWasmMemory() {
+    m_wasmMemory = nullptr;
+  }
+
 private:
   // These assume that m_wasmMemory was set prior to execution.
   size_t memorySize() const override { return Runtime::getMemoryNumPages(m_wasmMemory) * 65536; }
@@ -71,9 +76,15 @@ unique_ptr<WasmEngine> WavmEngine::create()
   return unique_ptr<WasmEngine>{new WavmEngine};
 }
 
+
 namespace wavm_host_module {
   // first the ethereum interface(s), the top of the stack is used in host functions
   stack<WavmEthereumInterface*> interface;
+
+  // set up for re-throwing exceptions, this is not clean, but Hera and WAVM are incompatible without some awkwardness 
+  enum class HeraExceptionsEnum {None, InternalErrorException, VMTrap, ArgumentOutOfRange, OutOfGas, ContractValidationFailure, InvalidMemoryAccess, EndExecution, StaticModeViolation};
+  HeraExceptionsEnum exceptionIdx = HeraExceptionsEnum::None;
+  string exceptionString;
 
 
   // the host module is called 'ethereum'
@@ -120,6 +131,9 @@ namespace wavm_host_module {
   DEFINE_INTRINSIC_FUNCTION(ethereum, "storageStore", void, storageStore, U32 pathOffset, U32 valueOffset)
   {
     interface.top()->eeiStorageStore(pathOffset, valueOffset);
+    // print stuff for debugging
+    interface.top()->debugPrintMem(1, valueOffset, 32);
+    interface.top()->debugPrintStorage(1, pathOffset);
   }
 
 
@@ -143,13 +157,33 @@ namespace wavm_host_module {
 
   DEFINE_INTRINSIC_FUNCTION(ethereum, "finish", void, finish, U32 dataOffset, U32 length)
   {
-    interface.top()->eeiFinish(dataOffset, length);
+    try {
+      interface.top()->eeiFinish(dataOffset, length);
+    } catch (InvalidMemoryAccess const& e) {
+      HERA_DEBUG<<"caught Hera's InvalidMemoryAccess\n";
+      // save exception so that we can throw it again later
+      exceptionIdx = HeraExceptionsEnum::InvalidMemoryAccess;
+      exceptionString = e.what();
+      // clear pointer to memory and trigger WAVM halt so that WAVM cleans up and exits
+      interface.top()->nullWasmMemory();
+      throwException(Runtime::Exception::calledUnimplementedIntrinsicType); //or maybe reachedUnreachableType
+    }
   }
 
 
   DEFINE_INTRINSIC_FUNCTION(ethereum, "revert", void, revert, U32 dataOffset, U32 length)
   {
-    interface.top()->eeiRevert(dataOffset, length);
+    try {
+      interface.top()->eeiRevert(dataOffset, length);
+    } catch (InvalidMemoryAccess const& e) {
+      HERA_DEBUG<<"caught Hera's InvalidMemoryAccess\n";
+      // save exception so that we can throw it again later
+      exceptionIdx = HeraExceptionsEnum::InvalidMemoryAccess;
+      exceptionString = e.what();
+      // clear pointer to memory and trigger WAVM halt so that WAVM cleans up and exits
+      interface.top()->nullWasmMemory();
+      throwException(Runtime::Exception::calledUnimplementedIntrinsicType); //or maybe reachedUnreachableType
+    }
   }
 
 
@@ -193,9 +227,48 @@ ExecutionResult WavmEngine::execute(
   evmc_message const& msg,
   bool meterInterfaceGas
 ) {
-  ExecutionResult result = internalExecute(context, code, state_code, msg, meterInterfaceGas);
-  // And clean up mess left by this run.
+
+  // clear stuff for re-throwing exception
+  wavm_host_module::exceptionIdx = wavm_host_module::HeraExceptionsEnum::None;
+  wavm_host_module::exceptionString = "";
+
+  // hope and prayer that this cleans up memory leak for previous run
   Runtime::collectGarbage();
+
+  // execute the contract
+  ExecutionResult result = internalExecute(context, code, state_code, msg, meterInterfaceGas);
+
+  // clean up this run, this is done here after leaving the scope of internalExecute()
+  Runtime::collectGarbage();
+
+  // re-throw exception if there was one
+  if (wavm_host_module::exceptionIdx != wavm_host_module::HeraExceptionsEnum::None){
+    wavm_host_module::HeraExceptionsEnum exceptionIdx = wavm_host_module::exceptionIdx;
+    string exceptionString = wavm_host_module::exceptionString;
+    wavm_host_module::exceptionIdx = wavm_host_module::HeraExceptionsEnum::None;
+    wavm_host_module::exceptionString = "";
+    switch (exceptionIdx){
+      case wavm_host_module::HeraExceptionsEnum::InternalErrorException:
+        ensureCondition(false, InternalErrorException, "hera exception re-thrown")
+      case wavm_host_module::HeraExceptionsEnum::VMTrap:
+        ensureCondition(false, VMTrap, "hera exception re-thrown")
+      case wavm_host_module::HeraExceptionsEnum::ArgumentOutOfRange:
+        ensureCondition(false, ArgumentOutOfRange, "hera exception re-thrown")
+      case wavm_host_module::HeraExceptionsEnum::OutOfGas:
+        ensureCondition(false, OutOfGas, "hera exception re-thrown")
+      case wavm_host_module::HeraExceptionsEnum::ContractValidationFailure:
+        ensureCondition(false, ContractValidationFailure, "hera exception re-thrown")
+      case wavm_host_module::HeraExceptionsEnum::InvalidMemoryAccess:
+        ensureCondition(false, InvalidMemoryAccess, "hera exception re-thrown")
+      case wavm_host_module::HeraExceptionsEnum::EndExecution:
+        ensureCondition(false, EndExecution, "hera exception re-thrown")
+      case wavm_host_module::HeraExceptionsEnum::StaticModeViolation:
+        ensureCondition(false, StaticModeViolation, "hera exception re-thrown")
+      default:
+        break;
+    }
+  }
+
   return result;
 }
 
@@ -262,17 +335,22 @@ ExecutionResult WavmEngine::internalExecute(
         vector<IR::Value> invokeArgs;
         Runtime::invokeFunctionChecked(wavm_context, mainFunction, invokeArgs);
       } catch (EndExecution const&) {
+        HERA_DEBUG<<"caught Hera's EndExecution\n";
         // This exception is ignored here because we consider it to be a success.
         // It is only a clutch for POSIX style exit()
       }
     },
     [&](Runtime::Exception&& exception) {
+      HERA_DEBUG<<"caught WAVM's Runtime::Exception\n";
       // FIXME: decide if each of the exception fit into VMTrap/InternalError
-      ensureCondition(false, VMTrap, Runtime::describeException(exception));
+      // ensureCondition(false, VMTrap, Runtime::describeException(exception));
+      if (wavm_host_module::exceptionIdx == wavm_host_module::HeraExceptionsEnum::None)
+        wavm_host_module::exceptionIdx = wavm_host_module::HeraExceptionsEnum::VMTrap;
     }
   );
 
   // clean up
+  wavm_host_module::interface.top()->nullWasmMemory();
   wavm_host_module::interface.pop();
 
   return result;
