@@ -34,6 +34,10 @@
 #include "eei.h"
 #include "exceptions.h"
 
+//for benchmarking
+#include <fstream>      // std::fstream
+#include <time.h>       // clock_t, clock
+
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
@@ -281,6 +285,11 @@ ExecutionResult WavmEngine::internalExecute(
 ) {
   HERA_DEBUG << "Executing with wavm...\n";
 
+  // benchmarking compiling
+  std::fstream fs;
+  fs.open ("runtime_data_wavm_compile.csv", std::fstream::out | std::fstream::app);
+  clock_t t = clock();
+
   // set up a new ethereum interface just for this contract invocation
   ExecutionResult result;
   WavmEthereumInterface interface{context, state_code, msg, result, meterInterfaceGas};
@@ -328,6 +337,16 @@ ExecutionResult WavmEngine::internalExecute(
   Runtime::GCPointer<Runtime::FunctionInstance> mainFunction = asFunctionNullable(Runtime::getInstanceExport(moduleInstance, "main"));
   ensureCondition(mainFunction, ContractValidationFailure, "\"main\" not found");
 
+  // done benchmarking compiling
+  t = clock() - t;
+  fs << ", " << ((float)t)/CLOCKS_PER_SEC;
+  fs.close();
+
+  // benchmarking runtime
+  std::fstream fs2;
+  fs2.open ("runtime_data_wavm_invoke.csv", std::fstream::out | std::fstream::app);
+  clock_t t2 = clock();
+
   // this is how WAVM's try/catch for exceptions
   Runtime::catchRuntimeExceptions(
     [&] {
@@ -348,6 +367,11 @@ ExecutionResult WavmEngine::internalExecute(
         wavm_host_module::exceptionIdx = wavm_host_module::HeraExceptionsEnum::VMTrap;
     }
   );
+
+  // done benchmarking invokation
+  t2 = clock() - t2;
+  fs2 << ", " << ((float)t2)/CLOCKS_PER_SEC;
+  fs2.close();
 
   // clean up
   wavm_host_module::interface.top()->nullWasmMemory();
