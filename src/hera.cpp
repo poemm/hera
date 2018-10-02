@@ -263,8 +263,6 @@ evmc_result hera_execute(
   hera_instance* hera = static_cast<hera_instance*>(instance);
 
   // benchmarking start
-  std::fstream fs;
-  fs.open ("runtime_data.csv", std::fstream::out | std::fstream::app);
   clock_t t = clock();
 
 
@@ -394,6 +392,8 @@ evmc_result hera_execute(
 
   // benchmarking end
   t = clock() - t;
+  std::fstream fs;
+  fs.open ("runtime_data.csv", std::fstream::out | std::fstream::app);
   fs << ", " << ((float)t)/CLOCKS_PER_SEC;
   fs.close();
 

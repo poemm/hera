@@ -286,8 +286,6 @@ ExecutionResult WavmEngine::internalExecute(
   HERA_DEBUG << "Executing with wavm...\n";
 
   // benchmarking compiling
-  std::fstream fs;
-  fs.open ("runtime_data_wavm_compile.csv", std::fstream::out | std::fstream::app);
   clock_t t = clock();
 
   // set up a new ethereum interface just for this contract invocation
@@ -339,12 +337,12 @@ ExecutionResult WavmEngine::internalExecute(
 
   // done benchmarking compiling
   t = clock() - t;
+  std::fstream fs;
+  fs.open ("runtime_data_wavm_compile.csv", std::fstream::out | std::fstream::app);
   fs << ", " << ((float)t)/CLOCKS_PER_SEC;
   fs.close();
 
   // benchmarking runtime
-  std::fstream fs2;
-  fs2.open ("runtime_data_wavm_invoke.csv", std::fstream::out | std::fstream::app);
   clock_t t2 = clock();
 
   // this is how WAVM's try/catch for exceptions
@@ -370,6 +368,8 @@ ExecutionResult WavmEngine::internalExecute(
 
   // done benchmarking invokation
   t2 = clock() - t2;
+  std::fstream fs2;
+  fs2.open ("runtime_data_wavm_invoke.csv", std::fstream::out | std::fstream::app);
   fs2 << ", " << ((float)t2)/CLOCKS_PER_SEC;
   fs2.close();
 
